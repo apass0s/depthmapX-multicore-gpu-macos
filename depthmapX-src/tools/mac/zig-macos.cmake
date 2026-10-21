@@ -39,6 +39,9 @@ endif()
 
 set(CMAKE_C_COMPILER "${ZIG}" cc -target ${zig_target})
 set(CMAKE_CXX_COMPILER "${ZIG}" c++ -target ${zig_target})
+# Objective-C++ (the Metal module) compiles too, but Zig has no Foundation or Metal
+# headers: building depthmapX_gpu fails at #import, so cross-builds use -DDEPTHMAPX_GPU=OFF.
+set(CMAKE_OBJCXX_COMPILER "${ZIG}" c++ -target ${zig_target})
 
 # Ninja needs single executables for the archiver: small wrapper scripts around zig.
 set(wrapper_dir "${CMAKE_BINARY_DIR}/zig-wrappers")
@@ -47,6 +50,11 @@ if (CMAKE_HOST_WIN32)
     file(WRITE "${wrapper_dir}/zig-ranlib.cmd" "@\"${ZIG}\" ranlib %*\r\n")
     set(CMAKE_AR "${wrapper_dir}/zig-ar.cmd" CACHE FILEPATH "" FORCE)
     set(CMAKE_RANLIB "${wrapper_dir}/zig-ranlib.cmd" CACHE FILEPATH "" FORCE)
+    # CMake requires install_name_tool for Objective-C++; only `cmake --install` would
+    # run it, which cross-builds never do.
+    file(WRITE "${wrapper_dir}/no-install-name-tool.cmd"
+         "@echo install_name_tool is not available in a cross-build 1>&2\r\n@exit /b 1\r\n")
+    set(CMAKE_INSTALL_NAME_TOOL "${wrapper_dir}/no-install-name-tool.cmd" CACHE FILEPATH "" FORCE)
 else()
     file(WRITE "${wrapper_dir}/zig-ar" "#!/bin/sh\nexec \"${ZIG}\" ar \"$@\"\n")
     file(WRITE "${wrapper_dir}/zig-ranlib" "#!/bin/sh\nexec \"${ZIG}\" ranlib \"$@\"\n")

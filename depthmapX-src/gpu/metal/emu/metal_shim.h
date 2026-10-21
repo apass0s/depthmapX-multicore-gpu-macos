@@ -28,21 +28,25 @@ struct uint2 {
     uint x, y;
 };
 
-inline u64 popcount(u64 x) {
+// Metal's 32-bit integer built-ins (the kernels build their 64-bit versions from these).
+inline uint popcount(uint x) {
 #if defined(_MSC_VER)
-    return u64(__popcnt64(x));
+    return uint(__popcnt(x));
 #else
-    return u64(__builtin_popcountll(x));
+    return uint(__builtin_popcount(x));
 #endif
 }
 
-inline u64 ctz(u64 x) { // x != 0 at every call in the kernels
+inline uint ctz(uint x) { // Metal: 32 for x == 0
+    if (x == 0) {
+        return 32;
+    }
 #if defined(_MSC_VER)
     unsigned long index;
-    _BitScanForward64(&index, x);
-    return u64(index);
+    _BitScanForward(&index, x);
+    return uint(index);
 #else
-    return u64(__builtin_ctzll(x));
+    return uint(__builtin_ctz(x));
 #endif
 }
 

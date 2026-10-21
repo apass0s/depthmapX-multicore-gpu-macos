@@ -30,6 +30,14 @@ typedef long i64;
 #include "dmx_metal_shared.h"
 #endif
 
+// 64-bit popcount / count-trailing-zeros from the 32-bit built-ins, which every Metal
+// version has for uint (the emulator runs this same code).
+inline int popcount64(u64 x) { return int(popcount(uint(x))) + int(popcount(uint(x >> 32))); }
+inline int ctz64(u64 x) { // x != 0
+    const uint lo = uint(x);
+    return lo != 0 ? int(ctz(lo)) : 32 + int(ctz(uint(x >> 32)));
+}
+
 // Writes 42: run by dmx_gpu_probe to check that the kernels compiled and execute.
 kernel void dmx_probe(device int *out DMX_ATTR(buffer(0)), uint gid DMX_ATTR(thread_position_in_grid)) {
     if (gid == 0) {
@@ -74,7 +82,7 @@ kernel void dmx_vis_local_rows(const device u64 *rows DMX_ATTR(buffer(0)),
     for (int w = 0; w < p.wordsPerRow; ++w) {
         u64 bits = rowU[w];
         while (bits != 0) {
-            const int bit = int(ctz(bits));
+            const int bit = ctz64(bits);
             bits &= bits - 1;
             const int v = pixelToRow[w * 64 + bit];
             if (v < 0) {
@@ -83,7 +91,7 @@ kernel void dmx_vis_local_rows(const device u64 *rows DMX_ATTR(buffer(0)),
             const device u64 *rowV = rows + u64(v) * u64(p.wordsPerRow) + u64(p.sliceStart);
             for (int t = int(tid); t < p.sliceWords; t += step) {
                 const u64 x = rowV[t];
-                intersect += i64(popcount(x & sliceU[t]));
+                intersect += i64(popcount64(x & sliceU[t]));
                 sliceUnion[t] |= x;
             }
             if (p.addDuplicates != 0 && tid == 0) {
@@ -97,7 +105,7 @@ kernel void dmx_vis_local_rows(const device u64 *rows DMX_ATTR(buffer(0)),
 
     int unionCount = 0;
     for (int t = int(tid); t < p.sliceWords; t += step) {
-        unionCount += int(popcount(sliceUnion[t]));
+        unionCount += popcount64(sliceUnion[t]);
     }
     redIntersect[tid] = intersect;
     redUnion[tid] = unionCount;
