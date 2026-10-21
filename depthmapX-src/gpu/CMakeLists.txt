@@ -18,6 +18,29 @@ target_sources(salalib PRIVATE
     host/axialintegrationaccel.cpp
     host/axialbrandes.cpp)
 
+# Apple's clang understands OpenMP but ships no runtime: point FindOpenMP at an LLVM libomp
+# (Homebrew's "libomp", or any folder with include/omp.h and lib/libomp.dylib).
+if (APPLE)
+    set(DEPTHMAPX_LIBOMP_ROOT "" CACHE PATH "Folder with include/omp.h and lib/libomp.dylib (macOS)")
+    set(libomp_root "${DEPTHMAPX_LIBOMP_ROOT}")
+    if (NOT libomp_root)
+        foreach(candidate "$ENV{HOMEBREW_PREFIX}/opt/libomp" /opt/homebrew/opt/libomp /usr/local/opt/libomp)
+            if (EXISTS "${candidate}/include/omp.h")
+                set(libomp_root "${candidate}")
+                break()
+            endif()
+        endforeach()
+    endif()
+    if (libomp_root AND NOT OpenMP_CXX_FLAGS)
+        message(STATUS "libomp: ${libomp_root}")
+        foreach(lang C CXX)
+            set(OpenMP_${lang}_FLAGS "-Xpreprocessor -fopenmp -I${libomp_root}/include")
+            set(OpenMP_${lang}_LIB_NAMES omp)
+        endforeach()
+        set(OpenMP_omp_LIBRARY "${libomp_root}/lib/libomp.dylib")
+    endif()
+endif()
+
 find_package(OpenMP)
 if (OpenMP_CXX_FOUND)
     target_link_libraries(salalib PUBLIC OpenMP::OpenMP_CXX)

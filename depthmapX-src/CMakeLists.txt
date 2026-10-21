@@ -1,12 +1,22 @@
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9" CACHE STRING "Minimum macOS deployment version")
+# macOS 11 is the first release on Apple Silicon, and the oldest the bundled OpenMP
+# runtime (libomp) supports.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS deployment version")
 project(depthmapX)
 cmake_minimum_required(VERSION 3.13.0)
 set(CMAKE_CXX_STANDARD 17)
 
-# Optional CUDA module (gpu/); without a CUDA compiler everything else still builds
-# and the accelerated analyses run on the CPU.
-option(DEPTHMAPX_GPU "Build the depthmapX_gpu CUDA module when a CUDA compiler is found" ON)
-if (DEPTHMAPX_GPU)
+# Without Qt (e.g. when cross-compiling) only the command line program, the libraries
+# and their tests are built.
+option(DEPTHMAPX_GUI "Build the depthmapX graphical interface and its tests (needs Qt 5)" ON)
+
+# Optional GPU module (gpu/), loaded at run time: CUDA on Windows and Linux, Metal on
+# macOS. Without it everything else still builds and the accelerated analyses run on
+# the CPU.
+option(DEPTHMAPX_GPU "Build the depthmapX_gpu module (CUDA, or Metal on macOS) when possible" ON)
+if (DEPTHMAPX_GPU AND APPLE)
+    # NVIDIA CUDA does not exist on macOS; gpu/metal implements the same C interface.
+    enable_language(OBJCXX)
+elseif (DEPTHMAPX_GPU)
     include(CheckLanguage)
     check_language(CUDA)
     if (CMAKE_CUDA_COMPILER)
@@ -17,8 +27,12 @@ if (DEPTHMAPX_GPU)
 endif()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
-    "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang") # Clang and AppleClang
     set(warnings "-Wall -Wextra")
+    # No fused multiply-add contraction (Clang contracts by default, and arm64 always has
+    # FMA): a*b+c must round like the upstream code compiled anywhere else.
+    add_compile_options($<$<COMPILE_LANGUAGE:C>:-ffp-contract=off> $<$<COMPILE_LANGUAGE:CXX>:-ffp-contract=off>
+                        $<$<COMPILE_LANGUAGE:OBJCXX>:-ffp-contract=off>)
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     set(warnings "/W4 /EHsc")
     execute_process(COMMAND make_version_header.bat WORKING_DIRECTORY depthmapX)
@@ -68,14 +82,25 @@ add_subdirectory(mgraph440Test)
 add_subdirectory(salaTest)
 add_subdirectory(depthmapXcli)
 add_subdirectory(cliTest)
-add_subdirectory(depthmapXTest)
-add_subdirectory(depthmapX)
-add_subdirectory(GuiUnitTest)
+if (DEPTHMAPX_GUI)
+    add_subdirectory(depthmapXTest)
+    add_subdirectory(depthmapX)
+    add_subdirectory(GuiUnitTest)
+endif()
 add_subdirectory(moduleTest)
 
-# Building either executable also builds the (run-time loaded) CUDA module.
+# Building either executable also builds the (run-time loaded) GPU module.
 if (TARGET depthmapX_gpu)
     add_dependencies(depthmapXcli depthmapX_gpu)
-    add_dependencies(depthmapX depthmapX_gpu)
+    if (TARGET depthmapX)
+        add_dependencies(depthmapX depthmapX_gpu)
+        if (APPLE)
+            # the loader also looks in the app bundle's Frameworks folder
+            add_custom_command(TARGET depthmapX POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_BUNDLE_CONTENT_DIR:depthmapX>/Frameworks
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:depthmapX_gpu>
+                        $<TARGET_BUNDLE_CONTENT_DIR:depthmapX>/Frameworks/)
+        endif()
+    endif()
 endif()
 

@@ -19,7 +19,13 @@
 
 //#include <io.h>
 #include <sys/types.h>
+#if defined(__has_include)
+#if __has_include(<sys/timeb.h>)
+#include <sys/timeb.h> // not used; absent from some SDKs (fix taken from the rapido build)
+#endif
+#else
 #include <sys/timeb.h>
+#endif
 #include <vector>
 #include <string>
 #include <fstream>
