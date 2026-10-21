@@ -89,6 +89,12 @@ if (DEPTHMAPX_GUI)
 endif()
 add_subdirectory(moduleTest)
 
+if (APPLE)
+    # A packaged depthmapXcli finds libomp.dylib next to itself (tools/mac/package_*).
+    set_property(TARGET depthmapXcli APPEND PROPERTY BUILD_RPATH "@executable_path")
+    set_property(TARGET depthmapXcli APPEND PROPERTY INSTALL_RPATH "@executable_path")
+endif()
+
 # Building either executable also builds the (run-time loaded) GPU module.
 if (TARGET depthmapX_gpu)
     add_dependencies(depthmapXcli depthmapX_gpu)

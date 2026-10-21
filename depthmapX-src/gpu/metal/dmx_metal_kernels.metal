@@ -44,7 +44,7 @@ kernel void dmx_probe(device int *out DMX_ATTR(buffer(0)), uint gid DMX_ATTR(thr
 // OR-s row v into the union. Rows wider than a slice are processed by several
 // dispatches (p.sliceStart), which add to clusterAcc / unionAcc.
 
-kernel void dmx_vis_local(const device u64 *rows DMX_ATTR(buffer(0)),
+kernel void dmx_vis_local_rows(const device u64 *rows DMX_ATTR(buffer(0)),
                           const device int *pixelToRow DMX_ATTR(buffer(1)),
                           const device i64 *dupOffsets DMX_ATTR(buffer(2)),
                           const device int *dupPixels DMX_ATTR(buffer(3)),

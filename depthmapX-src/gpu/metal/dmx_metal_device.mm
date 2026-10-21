@@ -26,7 +26,7 @@ namespace {
 #include "dmx_metal_source.inc"
 
 const char *const kKernelNames[kKernelCount] = {"dmx_probe",
-                                                "dmx_vis_local",
+                                                "dmx_vis_local_rows",
                                                 "dmx_vis_global_pull",
                                                 "dmx_vis_global_downsweep",
                                                 "dmx_vis_global_combine",

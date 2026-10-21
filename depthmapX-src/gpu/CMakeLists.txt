@@ -25,6 +25,8 @@ target_sources(salalib PRIVATE
 # (Homebrew's "libomp", or any folder with include/omp.h and lib/libomp.dylib).
 if (APPLE)
     set(DEPTHMAPX_LIBOMP_ROOT "" CACHE PATH "Folder with include/omp.h and lib/libomp.dylib (macOS)")
+    # Cross-builds link a text stub (tools/mac/make_tbd.py) naming @rpath/libomp.dylib instead.
+    set(DEPTHMAPX_LIBOMP_LIBRARY "" CACHE FILEPATH "libomp to link (default: <root>/lib/libomp.dylib)")
     set(libomp_root "${DEPTHMAPX_LIBOMP_ROOT}")
     if (NOT libomp_root)
         foreach(candidate "$ENV{HOMEBREW_PREFIX}/opt/libomp" /opt/homebrew/opt/libomp /usr/local/opt/libomp)
@@ -40,7 +42,11 @@ if (APPLE)
             set(OpenMP_${lang}_FLAGS "-Xpreprocessor -fopenmp -I${libomp_root}/include")
             set(OpenMP_${lang}_LIB_NAMES omp)
         endforeach()
-        set(OpenMP_omp_LIBRARY "${libomp_root}/lib/libomp.dylib")
+        if (DEPTHMAPX_LIBOMP_LIBRARY)
+            set(OpenMP_omp_LIBRARY "${DEPTHMAPX_LIBOMP_LIBRARY}")
+        else()
+            set(OpenMP_omp_LIBRARY "${libomp_root}/lib/libomp.dylib")
+        endif()
     endif()
 endif()
 
@@ -129,4 +135,7 @@ if (DEPTHMAPX_METAL_EMULATOR)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/metal-emu
         LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/metal-emu
         ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/metal-emu)
+    if (WIN32)
+        set_target_properties(depthmapX_gpu_metalemu PROPERTIES PREFIX "") # depthmapX_gpu.dll, also with MinGW
+    endif()
 endif()

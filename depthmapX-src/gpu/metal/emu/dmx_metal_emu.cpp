@@ -318,7 +318,7 @@ class EmuDevice : public Device {
             t_groupBarrier = &barrier;
             dmxemu::t_barrier = groupBarrier;
             for (uint32_t g = 0; g < groups; ++g) {
-                dmx_vis_local(rows, pixelToRow, dupOffsets, dupPixels, clusterAcc, unionAcc, p, sliceU.data(),
+                dmx_vis_local_rows(rows, pixelToRow, dupOffsets, dupPixels, clusterAcc, unionAcc, p, sliceU.data(),
                               sliceUnion.data(), redIntersect.data(), redUnion.data(), g, tid, threads);
                 barrier.arrive_and_wait();
             }
