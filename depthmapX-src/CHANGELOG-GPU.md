@@ -7,6 +7,26 @@ binaries.
 
 ## Unreleased
 
+### macOS port (experimental; `macos-testing` workspace, not run on a Mac yet)
+
+Full description, test results and the steps for Apple hardware: `../MACOS-PORT.md`.
+- Multicore CPU on macOS (arm64 and x86_64): the same OpenMP code, with LLVM libomp
+  (Apple's clang has no OpenMP runtime); `-ffp-contract=off` on clang and GCC.
+- GPU on macOS: `gpu/metal/`, a Metal module behind the same C interface as the CUDA
+  one (VGA visual local and global measures), with a CPU emulator (`gpu/metal/emu/`)
+  that runs the same kernels for tests on machines without Metal.
+- `-gpu` means Metal on macOS (help text, GUI checkbox, run reports); the GPU threshold
+  is per platform (Metal value provisional, `tools/mac/bench_gpu_threshold.py`).
+- Build: `DEPTHMAPX_GUI` option, macOS 11 minimum, Metal module in the app bundle,
+  `DEPTHMAPX_LIBOMP_ROOT` / `DEPTHMAPX_LIBOMP_LIBRARY`, `DEPTHMAPX_METAL_EMULATOR`.
+- `tools/mac/`: cross-compiling with Zig, upstream reference builds, Mach-O tools
+  (inspect, universal binaries, libomp stub), packaging and test scripts for a Mac.
+- Portability fixes: `mgraph440/comm.h` (`<sys/timeb.h>` only where it exists),
+  `salalib/layermanager.h` (`<cstdint>`).
+- `tools/gpu/validate.py`: `upstream` mode (compare with a separately built upstream).
+- Windows: same results as the current release in every validated case (the CUDA path
+  included); the credits say "Multicore + GPU build".
+
 ### Authorship credits
 
 The About box and the start-up licence screen now credit this build:
