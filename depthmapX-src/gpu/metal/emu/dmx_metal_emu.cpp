@@ -18,6 +18,7 @@
 // Limits (environment, for tests): DMX_METAL_EMU_THREADS (max threads per threadgroup,
 // default 256), DMX_METAL_EMU_TGMEM (threadgroup memory bytes, default 32768),
 // DMX_METAL_EMU_WORKING_SET_MB (default 8192), DMX_METAL_EMU_MAX_BUFFER_MB (default 4096);
+// DMX_METAL_EMU_MAX_GROUPS (threadgroups per dispatch, default 65535);
 // DMX_METAL_EMU_TRACE=1 prints every buffer allocation to stderr.
 
 #include "../dmx_metal_backend.h"
@@ -70,6 +71,7 @@ class EmuDevice : public Device {
           m_tgMemory(uint32_t(envNumber("DMX_METAL_EMU_TGMEM", 32768))),
           m_workingSet(envNumber("DMX_METAL_EMU_WORKING_SET_MB", 8192) << 20),
           m_maxBuffer(envNumber("DMX_METAL_EMU_MAX_BUFFER_MB", 4096) << 20),
+          m_maxGroups(uint32_t(envNumber("DMX_METAL_EMU_MAX_GROUPS", 65535))),
           m_trace(envNumber("DMX_METAL_EMU_TRACE", 0) != 0) {}
 
     void describe(dmx_gpu_device_info &info) const override {
@@ -85,6 +87,7 @@ class EmuDevice : public Device {
     uint64_t maxBufferBytes() const override { return m_maxBuffer; }
     uint32_t maxThreadgroupMemory() const override { return m_tgMemory; }
     uint32_t maxThreadsPerThreadgroup(Kernel) const override { return m_maxThreads; }
+    uint32_t maxGroupsPerDispatch() const override { return m_maxGroups; }
 
     Buffer *allocate(size_t bytes, std::string &error) override {
         if (bytes > m_maxBuffer) {
@@ -151,6 +154,10 @@ class EmuDevice : public Device {
         }
         if (threads == 0 || threads > m_maxThreads) {
             fail("threads per threadgroup above the pipeline limit");
+            return;
+        }
+        if (groupsX > m_maxGroups) {
+            fail("threadgroups per dispatch above the device limit");
             return;
         }
         try {
@@ -335,6 +342,7 @@ class EmuDevice : public Device {
 
     const uint32_t m_maxThreads, m_tgMemory;
     const uint64_t m_workingSet, m_maxBuffer;
+    const uint32_t m_maxGroups;
     const bool m_trace;
     uint64_t m_allocated = 0;
     bool m_open = false;

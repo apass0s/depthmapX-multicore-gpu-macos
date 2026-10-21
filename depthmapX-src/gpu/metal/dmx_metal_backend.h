@@ -35,6 +35,9 @@ class Device {
     virtual uint64_t maxBufferBytes() const = 0;
     virtual uint32_t maxThreadgroupMemory() const = 0;
     virtual uint32_t maxThreadsPerThreadgroup(Kernel kernel) const = 0;
+    // Threadgroups per dispatch along x: larger 1D grids are split. Metal documents no
+    // per-dimension limit we could confirm, so the default is the most conservative one.
+    virtual uint32_t maxGroupsPerDispatch() const { return 65535; }
 
     // Buffer whose contents the CPU reads and writes directly (no copies). Returns null
     // and sets error on failure. Contents are undefined until written.

@@ -133,7 +133,8 @@ kernel void dmx_vis_global_pull(const device i64 *keyOffsets DMX_ATTR(buffer(0))
                                 const device u64 *frontier DMX_ATTR(buffer(2)),
                                 device u64 *blocks DMX_ATTR(buffer(3)),
                                 constant DmxVisGlobalParams &p DMX_ATTR(buffer(4)),
-                                uint t DMX_ATTR(thread_position_in_grid)) {
+                                uint gid DMX_ATTR(thread_position_in_grid)) {
+    const uint t = p.base + gid;
     const uint lw = uint(p.laneWords);
     if (t >= p.nKeys * lw) {
         return;
@@ -152,7 +153,8 @@ kernel void dmx_vis_global_pull(const device i64 *keyOffsets DMX_ATTR(buffer(0))
 // Reads level k and writes level k-1 only, so the threads of one dispatch never conflict.
 kernel void dmx_vis_global_downsweep(device u64 *blocks DMX_ATTR(buffer(0)),
                                      constant DmxVisGlobalParams &p DMX_ATTR(buffer(1)),
-                                     uint t DMX_ATTR(thread_position_in_grid)) {
+                                     uint gid DMX_ATTR(thread_position_in_grid)) {
+    const uint t = p.base + gid;
     const uint lw = uint(p.laneWords);
     const uint perOrientation = uint(p.nPositions) * lw;
     if (t >= DMX_METAL_ORIENTATIONS * perOrientation) {
@@ -182,7 +184,8 @@ kernel void dmx_vis_global_combine(const device u64 *blocks DMX_ATTR(buffer(0)),
                                    device u64 *visited DMX_ATTR(buffer(3)),
                                    device atomic_int *anyReached DMX_ATTR(buffer(4)),
                                    constant DmxVisGlobalParams &p DMX_ATTR(buffer(5)),
-                                   uint t DMX_ATTR(thread_position_in_grid)) {
+                                   uint gid DMX_ATTR(thread_position_in_grid)) {
+    const uint t = p.base + gid;
     const uint lw = uint(p.laneWords);
     if (t >= uint(p.nNodes) * lw) {
         return;
@@ -212,7 +215,7 @@ kernel void dmx_vis_global_count(const device u64 *frontier DMX_ATTR(buffer(0)),
                                  uint tgSize DMX_ATTR(threads_per_threadgroup)) {
     const uint lw = uint(p.laneWords);
     const uint w = group.y;
-    const int begin = int(group.x) * DMX_METAL_COUNT_CHUNK;
+    const int begin = int(p.base + group.x) * DMX_METAL_COUNT_CHUNK;
     const int end = min(p.nNodes, begin + DMX_METAL_COUNT_CHUNK);
     for (uint b = tid; b < 64; b += tgSize) {
         const int lane = int(w * 64 + b);

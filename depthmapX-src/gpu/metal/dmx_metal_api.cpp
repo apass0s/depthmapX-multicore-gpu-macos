@@ -87,6 +87,20 @@ uint32_t groupThreads(const Device &dev, Kernel kernel) {
     return t >= 32 ? t / 32 * 32 : std::max<uint32_t>(t, 1);
 }
 
+// Dispatches a 1D grid of `threads` threads (rounded up to whole groups) in pieces of at
+// most dev.maxGroupsPerDispatch() threadgroups; p.base tells each piece where it starts.
+// The parameters are rebound per piece at `paramsIndex`.
+void dispatch1D(Device &dev, Kernel kernel, uint64_t threads, uint32_t perGroup, DmxVisGlobalParams p,
+                int paramsIndex) {
+    const uint64_t groups = groupsFor(threads, perGroup);
+    const uint64_t step = std::max<uint64_t>(1, dev.maxGroupsPerDispatch());
+    for (uint64_t first = 0; first < groups; first += step) {
+        p.base = unsigned(first * perGroup);
+        dev.setBytes(&p, sizeof(p), paramsIndex);
+        dev.dispatch(kernel, uint32_t(std::min(step, groups - first)), 1, perGroup);
+    }
+}
+
 // Allocates (at least 16 bytes) and fills with `bytes` of data when data is given.
 int makeBuffer(Device &dev, Buffer *&out, const void *data, size_t bytes, const char *what) {
     out = nullptr;
@@ -435,6 +449,7 @@ DMX_GPU_API int dmx_vis_global_run(dmx_vis_global *ctx, int32_t firstSource, int
     p.k = 0;
     p.nSources = nSources;
     p.nKeys = unsigned(ctx->nKeys);
+    p.base = 0;
 
     std::string error;
     int level = 0;
@@ -448,17 +463,13 @@ DMX_GPU_API int dmx_vis_global_run(dmx_vis_global *ctx, int32_t firstSource, int
         dev.setBuffer(ctx->keyNodes, 0, 1);
         dev.setBuffer(ctx->frontier, 0, 2);
         dev.setBuffer(ctx->blocks, 0, 3);
-        dev.setBytes(&p, sizeof(p), 4);
-        dev.dispatch(Kernel::VisGlobalPull, groupsFor(ctx->nKeys * uint64_t(lw), ctx->pullThreads), 1,
-                     ctx->pullThreads);
+        dispatch1D(dev, Kernel::VisGlobalPull, ctx->nKeys * uint64_t(lw), ctx->pullThreads, p, 4);
         for (int k = ctx->nLevels - 1; k >= 1; --k) {
             p.k = k;
             dev.setBuffer(ctx->blocks, 0, 0);
-            dev.setBytes(&p, sizeof(p), 1);
-            dev.dispatch(Kernel::VisGlobalDownsweep,
-                         groupsFor(uint64_t(DMX_METAL_ORIENTATIONS) * uint64_t(ctx->nPositions) * uint64_t(lw),
-                                   ctx->downsweepThreads),
-                         1, ctx->downsweepThreads);
+            dispatch1D(dev, Kernel::VisGlobalDownsweep,
+                       uint64_t(DMX_METAL_ORIENTATIONS) * uint64_t(ctx->nPositions) * uint64_t(lw),
+                       ctx->downsweepThreads, p, 1);
         }
         p.k = 0;
         dev.setBuffer(ctx->blocks, 0, 0);
@@ -466,13 +477,18 @@ DMX_GPU_API int dmx_vis_global_run(dmx_vis_global *ctx, int32_t firstSource, int
         dev.setBuffer(ctx->frontier, 0, 2);
         dev.setBuffer(ctx->visited, 0, 3);
         dev.setBuffer(ctx->anyReached, 0, 4);
-        dev.setBytes(&p, sizeof(p), 5);
-        dev.dispatch(Kernel::VisGlobalCombine, groupsFor(nodeWords, ctx->combineThreads), 1, ctx->combineThreads);
+        dispatch1D(dev, Kernel::VisGlobalCombine, nodeWords, ctx->combineThreads, p, 5);
         dev.setBuffer(ctx->frontier, 0, 0);
         dev.setBuffer(ctx->levelCounts, 0, 1);
-        dev.setBytes(&p, sizeof(p), 2);
-        dev.dispatch(Kernel::VisGlobalCount, groupsFor(uint64_t(ctx->nNodes), DMX_METAL_COUNT_CHUNK), uint32_t(lw),
-                     ctx->countThreads);
+        const uint64_t chunks = groupsFor(uint64_t(ctx->nNodes), DMX_METAL_COUNT_CHUNK);
+        const uint64_t step = std::max<uint64_t>(1, dev.maxGroupsPerDispatch());
+        for (uint64_t first = 0; first < chunks; first += step) {
+            DmxVisGlobalParams pc = p;
+            pc.base = unsigned(first);
+            dev.setBytes(&pc, sizeof(pc), 2);
+            dev.dispatch(Kernel::VisGlobalCount, uint32_t(std::min(step, chunks - first)), uint32_t(lw),
+                         ctx->countThreads);
+        }
         if (!dev.commit(true, error)) {
             return setError(DMX_GPU_ERR_CUDA, "VGA visual global: " + error);
         }

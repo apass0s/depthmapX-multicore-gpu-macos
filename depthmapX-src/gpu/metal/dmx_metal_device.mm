@@ -57,14 +57,16 @@ class MetalDevice : public Device {
             options.fastMathEnabled = NO; // the kernels are integer-only; kept strict anyway
 #pragma clang diagnostic pop
             NSError *err = nil;
-            id<MTLLibrary> library = [m_device newLibraryWithSource:@(kKernelSource) options:options error:&err];
+            NSString *source = [NSString stringWithUTF8String:kKernelSource];
+            id<MTLLibrary> library = [m_device newLibraryWithSource:source options:options error:&err];
             if (!library) {
                 *code = DMX_GPU_ERR_UNSUPPORTED;
                 error = "the Metal kernels failed to compile: " + message(err);
                 return false;
             }
             for (int i = 0; i < kKernelCount; ++i) {
-                id<MTLFunction> function = [library newFunctionWithName:@(kKernelNames[i])];
+                id<MTLFunction> function =
+                    [library newFunctionWithName:[NSString stringWithUTF8String:kKernelNames[i]]];
                 if (!function) {
                     *code = DMX_GPU_ERR_UNSUPPORTED;
                     error = std::string("Metal kernel missing: ") + kKernelNames[i];

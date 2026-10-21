@@ -27,6 +27,8 @@ struct DmxVisGlobalParams {
     int nSources;    // vis_global_count: lanes in use
     unsigned int nKeys; // 4 * nLevels * nPositions; the host keeps nKeys * laneWords < 2^32,
                         // so every grid index fits the 32-bit thread position
+    unsigned int base;  // first thread of the dispatch (vis_global_count: first node chunk);
+                        // the host splits large grids into several dispatches
 };
 
 #endif
