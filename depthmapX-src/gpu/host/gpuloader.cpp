@@ -12,7 +12,11 @@
 #else
 #include <dlfcn.h>
 #include <climits>
+#include <cstdlib>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 #endif
 
 namespace dmxaccel {
@@ -51,6 +55,22 @@ void *openLibrary(const std::string &utf8Path, std::string &error) {
 void *findSymbol(void *handle, const char *name) {
     return reinterpret_cast<void *>(GetProcAddress(reinterpret_cast<HMODULE>(handle), name));
 }
+#elif defined(__APPLE__)
+const char *const kLibraryName = "libdepthmapX_gpu.dylib"; // the Metal module (gpu/metal)
+
+std::string executableDirectory() {
+    char raw[PATH_MAX * 2];
+    uint32_t size = sizeof(raw);
+    if (_NSGetExecutablePath(raw, &size) != 0) {
+        return std::string();
+    }
+    char resolved[PATH_MAX];
+    if (!realpath(raw, resolved)) {
+        return std::string();
+    }
+    std::string dir(resolved);
+    return dir.substr(0, dir.find_last_of('/') + 1);
+}
 #else
 const char *const kLibraryName = "libdepthmapX_gpu.so";
 
@@ -63,7 +83,9 @@ std::string executableDirectory() {
     std::string dir(path, size_t(len));
     return dir.substr(0, dir.find_last_of('/') + 1);
 }
+#endif
 
+#ifndef _WIN32
 void *openLibrary(const std::string &path, std::string &error) {
     void *h = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
     if (!h) {
@@ -100,6 +122,16 @@ bool GpuModule::load() {
         return false;
     }
     m_handle = openLibrary(dir + kLibraryName, m_reason);
+#ifdef __APPLE__
+    if (!m_handle) {
+        // depthmapX.app/Contents/MacOS/depthmapX -> depthmapX.app/Contents/Frameworks/
+        std::string firstError = m_reason;
+        m_handle = openLibrary(dir + "../Frameworks/" + kLibraryName, m_reason);
+        if (!m_handle) {
+            m_reason = firstError;
+        }
+    }
+#endif
     if (!m_handle) {
         return false;
     }
@@ -139,8 +171,15 @@ bool GpuModule::load() {
 
 std::string GpuModule::deviceDescription() const {
     char buf[400];
+#ifdef __APPLE__
+    // Metal: cc_major is the newest Apple GPU family supported, total_mem the recommended
+    // working set of the unified memory
+    std::snprintf(buf, sizeof(buf), "%s, Metal, GPU family Apple%d, %.0f MiB", m_device.name, m_device.cc_major,
+                  m_device.total_mem / 1048576.0);
+#else
     std::snprintf(buf, sizeof(buf), "%s, compute %d.%d, %.0f MiB", m_device.name, m_device.cc_major,
                   m_device.cc_minor, m_device.total_mem / 1048576.0);
+#endif
     return buf;
 }
 

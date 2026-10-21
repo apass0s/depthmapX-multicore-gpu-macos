@@ -16,11 +16,20 @@
 #include "OptionsDlg.h"
 #include "mainwindow.h"
 #include <QMessageBox>
+#include "gpu/host/accelcommon.h"
 
 COptionsDlg::COptionsDlg(QWidget *parent)
 : QDialog(parent)
 {
 	setupUi(this);
+#ifdef __APPLE__
+	c_use_gpu->setText(tr("Use the &GPU (Metal) when available"));
+	c_use_gpu->setToolTip(tr("Runs visibility relationships (local and global measures) on the Mac's GPU. "
+	                         "Without a suitable GPU, or for maps under %1 points, all CPU cores are used. "
+	                         "Results are identical either way.").arg(dmxaccel::kDefaultGpuMinNodes));
+#else
+	c_use_gpu->setToolTip(c_use_gpu->toolTip().replace("10000", QString::number(dmxaccel::kDefaultGpuMinNodes)));
+#endif
 	m_global = false;
 	m_local = false;
 	m_radius = tr("");

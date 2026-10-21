@@ -20,6 +20,8 @@
 #include <vector>
 #include <string>
 
+#include "gpu/host/accelcommon.h"
+
 // Options for mean depth calculations
 struct Options
 {
@@ -70,5 +72,5 @@ struct Options
      output_type = OUTPUT_ISOVIST; process_in_memory = false; gates_only = false; sel_only = false;
      gatelayer = -1;
      weighted_measure_col = -1;
-     compute_mode = COMPUTE_CPU_PARALLEL; gpu_min_nodes = 10000; brandes_choice = false;}
+     compute_mode = COMPUTE_CPU_PARALLEL; gpu_min_nodes = dmxaccel::kDefaultGpuMinNodes; brandes_choice = false;}
 };

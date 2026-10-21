@@ -47,7 +47,7 @@
     <item>
      <widget class="QLabel" name="c_build_credits">
       <property name="text">
-       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Multicore + NVIDIA GPU build: (C) 2026 Leonardo Luna, Aderson Passos&lt;br/&gt;LInA-UFC &amp;ndash; Laborat&amp;oacute;rio de Modelagem da Informa&amp;ccedil;&amp;atilde;o em Arte,&lt;br/&gt;Arquitetura e Ambiente da Universidade Federal do Cear&amp;aacute;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Multicore + GPU build: (C) 2026 Leonardo Luna, Aderson Passos&lt;br/&gt;LInA-UFC &amp;ndash; Laborat&amp;oacute;rio de Modelagem da Informa&amp;ccedil;&amp;atilde;o em Arte,&lt;br/&gt;Arquitetura e Ambiente da Universidade Federal do Cear&amp;aacute;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
       </property>
      </widget>
     </item>

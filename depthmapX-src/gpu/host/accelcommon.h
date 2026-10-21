@@ -1,5 +1,5 @@
 // depthmapX GPU module - settings, run reports and bit helpers shared by the
-// accelerated (multicore CPU / CUDA) analysis paths
+// accelerated (multicore CPU / GPU) analysis paths
 
 #pragma once
 
@@ -15,13 +15,25 @@ namespace dmxaccel {
 
 enum class ComputeMode {
     CpuParallel, // multicore CPU (OpenMP), the default
-    Gpu,         // CUDA when available and the map is large enough, otherwise multicore CPU
+    Gpu,         // the GPU module (CUDA, Metal on macOS) when available and the map is large
+                 // enough, otherwise multicore CPU
     Serial       // the original single-threaded upstream code
 };
 
-// Maps smaller than this run on the CPU even when the GPU is requested: below it the
-// CUDA set-up and transfers cost more than they save.
+#ifdef __APPLE__
+// GPU programming interface behind the GPU module, for messages.
+constexpr const char *kGpuBackend = "Metal";
+// Maps smaller than this run on the CPU even when the GPU is requested.
+// PROVISIONAL: not measured on Apple hardware. Metal has no host-device copies (unified
+// memory) but compiles its kernels when first used, so the break-even point differs from
+// CUDA's; measure it with tools/mac/bench_gpu_threshold.py and set it here.
 constexpr int kDefaultGpuMinNodes = 10000;
+#else
+constexpr const char *kGpuBackend = "CUDA";
+// Maps smaller than this run on the CPU even when the GPU is requested: below it the
+// CUDA set-up and transfers cost more than they save (measured on an RTX 4060 Ti).
+constexpr int kDefaultGpuMinNodes = 10000;
+#endif
 
 struct AccelSettings {
     ComputeMode mode = ComputeMode::CpuParallel;

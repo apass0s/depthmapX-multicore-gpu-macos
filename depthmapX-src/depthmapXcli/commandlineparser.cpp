@@ -18,6 +18,7 @@
 #include "imodeparserfactory.h"
 #include "parsingutils.h"
 #include "version.h"
+#include "gpu/host/accelcommon.h"
 #include <iostream>
 #include <cstring>
 #include <algorithm>
@@ -32,9 +33,14 @@ void CommandLineParser::printHelp(){
               << "-s enables simple mode\n"
               << "-t <times.csv> enables output of runtimes as csv file\n"
               << "-p enables text progress printing\n"
+#ifdef __APPLE__
+              << "-gpu runs supported analyses on the GPU (Metal) when one is available,\n"
+#else
               << "-gpu runs supported analyses on an NVIDIA GPU (CUDA) when one is available,\n"
+#endif
               << "     otherwise on all CPU cores. Supported: VGA visibility (local, global)\n"
-              << "-gpumin <points> smallest map sent to the GPU (default 10000, 0 = always)\n"
+              << "-gpumin <points> smallest map sent to the GPU (default " << dmxaccel::kDefaultGpuMinNodes
+              << ", 0 = always)\n"
               << "-serial runs VGA visibility, metric and angular with the original\n"
               << "     single-threaded code (default: all CPU cores)\n"
 
@@ -52,7 +58,7 @@ void CommandLineParser::printVersion(){
 
 CommandLineParser::CommandLineParser(const IModeParserFactory &parserFactory)
     :  m_simpleMode(false), m_printProgress(false), m_computeMode(Options::COMPUTE_CPU_PARALLEL),
-       m_gpuMinNodes(10000), _parserFactory(parserFactory), _modeParser(0)
+       m_gpuMinNodes(dmxaccel::kDefaultGpuMinNodes), _parserFactory(parserFactory), _modeParser(0)
 {}
 
 void CommandLineParser::parse(size_t argc, char *argv[])
