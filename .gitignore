@@ -1,0 +1,5 @@
+# downloaded tools and reference sources (see MACOS-PORT.md for where they come from)
+/tools/
+/upstream/
+# build output
+/out/
