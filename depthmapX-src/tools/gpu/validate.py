@@ -11,7 +11,9 @@ Example:
       --modes serial,cpu,gpu,rapido --reference serial --cases vis_local --out C:/dmx/validate
 
 Modes: serial (new build, -serial = original upstream code), cpu (new build,
-multicore), gpu (new build, -gpu -gpumin 0), rapido (the rapido build, if given).
+multicore), gpu (new build, -gpu -gpumin 0), rapido (the rapido build, if given),
+upstream (an unmodified upstream depthmapXcli built separately, if given; best built
+with the same compiler and flags, e.g. on the same Mac).
 The GPU mode fails validation if the run report does not say the GPU was used.
 Exit code 0 only if every comparison matches.
 """
@@ -59,7 +61,7 @@ CASES = {
     "vis_both": (["-m", "VGA", "-vm", "visibility", "-vg", "-vl", "-vr", "n"], "pointmap-data-csv", 0.0, 0.0),
 }
 
-MODE_FLAGS = {"serial": ["-serial"], "cpu": [], "gpu": ["-gpu", "-gpumin", "0"], "rapido": []}
+MODE_FLAGS = {"serial": ["-serial"], "cpu": [], "gpu": ["-gpu", "-gpumin", "0"], "rapido": [], "upstream": []}
 
 
 def sha256(path):
@@ -97,6 +99,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--cli", required=True, help="new depthmapXcli.exe")
     ap.add_argument("--rapido", help="rapido depthmapXcli.exe (enables the 'rapido' mode)")
+    ap.add_argument("--upstream", help="unmodified upstream depthmapXcli (enables the 'upstream' mode)")
     ap.add_argument("--graph", action="append", default=[], help="input .graph with a VGA grid (repeatable)")
     ap.add_argument("--make-grid", action="append", default=[], metavar="SPACING",
                     help="also generate a grid with this spacing from --grid-base (repeatable)")
@@ -123,6 +126,8 @@ def main():
     modes = a.modes.split(",")
     if "rapido" in modes and not a.rapido:
         ap.error("mode 'rapido' needs --rapido")
+    if "upstream" in modes and not a.upstream:
+        ap.error("mode 'upstream' needs --upstream")
     if a.reference not in modes:
         ap.error("--reference must be one of --modes")
     ordered = [a.reference] + [m for m in modes if m != a.reference]
@@ -136,7 +141,7 @@ def main():
             ref_csv = None
             ref_graph = None
             for mode in ordered:
-                exe = a.rapido if mode == "rapido" else a.cli
+                exe = {"rapido": a.rapido, "upstream": a.upstream}.get(mode, a.cli)
                 stem = os.path.join(a.out, f"{gname}.{case}.{mode}")
                 out = run([exe, *args, *MODE_FLAGS[mode], "-f", graph, "-o", stem + ".graph", "-t", stem + ".times.csv"],
                           stem + ".log")

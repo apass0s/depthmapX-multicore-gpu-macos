@@ -1,9 +1,12 @@
 # depthmapX GPU module
 #
 # host/  is compiled into salalib: the multicore (OpenMP) versions of the accelerated
-#        analyses and the run-time loader for the CUDA DLL. It never links CUDA.
-# cuda/  builds depthmapX_gpu (DLL / shared library) with nvcc. salalib loads it at run
-#        time, so binaries run on machines without CUDA.
+#        analyses and the run-time loader for the GPU module. It never links CUDA or Metal.
+# cuda/  builds depthmapX_gpu (DLL / shared library) with nvcc (Windows, Linux).
+# metal/ builds libdepthmapX_gpu.dylib on macOS: the same C interface (include/) on Metal.
+#        metal/emu/ runs the Metal kernels on CPU threads, to test them without a Mac.
+# salalib loads the module at run time, so the programs run where it, the driver or a
+# suitable GPU is missing.
 
 target_sources(salalib PRIVATE
     host/accelcommon.cpp
@@ -74,4 +77,56 @@ if (CMAKE_CUDA_COMPILER)
             COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/${exe_dir}
             COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:depthmapX_gpu> ${CMAKE_BINARY_DIR}/${exe_dir}/)
     endforeach()
+endif()
+
+# Metal kernel source (dmx_metal_shared.h + dmx_metal_kernels.metal) as a C string, for
+# compiling at run time; regenerated when either file changes.
+function(dmx_embed_metal_source out_file)
+    file(READ ${CMAKE_CURRENT_SOURCE_DIR}/metal/dmx_metal_shared.h shared_src)
+    file(READ ${CMAKE_CURRENT_SOURCE_DIR}/metal/dmx_metal_kernels.metal kernels_src)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/metal/dmx_metal_shared.h ${CMAKE_CURRENT_SOURCE_DIR}/metal/dmx_metal_kernels.metal)
+    file(WRITE ${out_file} "static const char kKernelSource[] = R\"DMXMSL(${shared_src}\n${kernels_src})DMXMSL\";\n")
+endfunction()
+
+if (APPLE AND DEPTHMAPX_GPU)
+    dmx_embed_metal_source(${CMAKE_CURRENT_BINARY_DIR}/dmx_metal_source.inc)
+    add_library(depthmapX_gpu SHARED
+        metal/dmx_metal_api.cpp
+        metal/dmx_metal_device.mm)
+    target_include_directories(depthmapX_gpu PRIVATE ${CMAKE_CURRENT_BINARY_DIR} metal)
+    target_compile_options(depthmapX_gpu PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+    target_link_libraries(depthmapX_gpu PRIVATE "-framework Metal" "-framework Foundation")
+    set_target_properties(depthmapX_gpu PROPERTIES
+        CXX_VISIBILITY_PRESET hidden
+        OBJCXX_VISIBILITY_PRESET hidden
+        OBJCXX_STANDARD 17
+        # dlopen'ed by full path; @rpath keeps the bundle relocatable
+        INSTALL_NAME_DIR "@rpath")
+
+    # The loader looks next to the executable (and in the app's Frameworks folder, see
+    # the top-level CMakeLists.txt), so put a copy beside the command line program.
+    add_custom_command(TARGET depthmapX_gpu POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/depthmapXcli
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:depthmapX_gpu> ${CMAKE_BINARY_DIR}/depthmapXcli/)
+endif()
+
+# The Metal module on its CPU emulator, as a drop-in GPU module for tests: copy it, named
+# depthmapX_gpu.dll / libdepthmapX_gpu.so, next to a depthmapXcli (see tools/mac/).
+option(DEPTHMAPX_METAL_EMULATOR "Build the Metal module on its CPU emulator (tests without a Mac)" OFF)
+if (DEPTHMAPX_METAL_EMULATOR)
+    find_package(Threads REQUIRED)
+    add_library(depthmapX_gpu_metalemu SHARED
+        metal/dmx_metal_api.cpp
+        metal/emu/dmx_metal_emu.cpp)
+    target_include_directories(depthmapX_gpu_metalemu PRIVATE metal)
+    target_compile_definitions(depthmapX_gpu_metalemu PRIVATE DMX_GPU_BUILDING_DLL)
+    target_link_libraries(depthmapX_gpu_metalemu PRIVATE Threads::Threads)
+    set_target_properties(depthmapX_gpu_metalemu PROPERTIES
+        CXX_STANDARD 20 # std::barrier
+        CXX_VISIBILITY_PRESET hidden
+        OUTPUT_NAME depthmapX_gpu
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/metal-emu
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/metal-emu
+        ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/metal-emu)
 endif()
