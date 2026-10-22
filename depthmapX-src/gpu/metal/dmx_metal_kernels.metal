@@ -207,12 +207,16 @@ kernel void dmx_vis_global_combine(const device u64 *blocks DMX_ATTR(buffer(0)),
 
 // Threadgroup (chunk, w) of up to 64 threads: thread tid counts the lanes w * 64 + b,
 // b = tid, tid + tgSize, ... < 64, over the chunk's nodes and adds them to levelCounts.
+// Metal requires the position inputs of a kernel to be all scalars or all vectors of one
+// size: the grid is 2D, so the thread's position and the group size come as uint2 too
+// (threadgroups are 1D, so their .x is the thread index and the group size).
 kernel void dmx_vis_global_count(const device u64 *frontier DMX_ATTR(buffer(0)),
                                  device atomic_int *levelCounts DMX_ATTR(buffer(1)),
                                  constant DmxVisGlobalParams &p DMX_ATTR(buffer(2)),
                                  uint2 group DMX_ATTR(threadgroup_position_in_grid),
-                                 uint tid DMX_ATTR(thread_index_in_threadgroup),
-                                 uint tgSize DMX_ATTR(threads_per_threadgroup)) {
+                                 uint2 tid2 DMX_ATTR(thread_position_in_threadgroup),
+                                 uint2 tgSize2 DMX_ATTR(threads_per_threadgroup)) {
+    const uint tid = tid2.x, tgSize = tgSize2.x;
     const uint lw = uint(p.laneWords);
     const uint w = group.y;
     const int begin = int(p.base + group.x) * DMX_METAL_COUNT_CHUNK;

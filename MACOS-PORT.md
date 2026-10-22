@@ -142,7 +142,10 @@ dispatches of at most 65,535 threadgroups; 64-bit popcount / ctz built from 32-b
 built-ins (the 64-bit forms are not guaranteed in every Metal version); the GPU module
 released its Metal objects from a static destructor while the process exited, which
 crashed under the fake runtime after the results were written (now the device is never
-destroyed).
+destroyed). The first GitHub Actions run (Apple's Metal compiler) rejected
+`dmx_vis_global_count`: Metal requires a kernel's position inputs to be all scalars or
+all vectors of one size, and it mixed `uint2` with `uint` (the emulator, compiled as C++,
+cannot see this). Now all three are `uint2`.
 
 Timings measured here are not meaningful for Metal (the emulator runs on the CPU and is
 slow by design).

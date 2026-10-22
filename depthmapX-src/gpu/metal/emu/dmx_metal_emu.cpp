@@ -296,7 +296,7 @@ class EmuDevice : public Device {
             atomic_int *levelCounts = arg<atomic_int>(1);
             const DmxVisGlobalParams &p = *arg<const DmxVisGlobalParams>(2);
             forEachThread(groupsX, groupsY, threads,
-                          [&](uint2 g, uint32_t tid) { dmx_vis_global_count(frontier, levelCounts, p, g, tid, threads); });
+                          [&](uint2 g, uint32_t tid) { dmx_vis_global_count(frontier, levelCounts, p, g, uint2{tid, 0}, uint2{threads, 1}); });
             break;
         }
         }
