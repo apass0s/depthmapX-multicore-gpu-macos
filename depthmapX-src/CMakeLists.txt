@@ -106,11 +106,15 @@ if (TARGET depthmapX_gpu)
     if (TARGET depthmapX)
         add_dependencies(depthmapX depthmapX_gpu)
         if (APPLE)
-            # the loader also looks in the app bundle's Frameworks folder
-            add_custom_command(TARGET depthmapX POST_BUILD
+            # The loader also looks in the app bundle's Frameworks folder. A custom target,
+            # because a POST_BUILD step may only be attached where its target is created
+            # (depthmapX/); it runs after both the app and the module are built.
+            add_custom_target(depthmapX_bundle_gpu ALL
                 COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_BUNDLE_CONTENT_DIR:depthmapX>/Frameworks
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:depthmapX_gpu>
-                        $<TARGET_BUNDLE_CONTENT_DIR:depthmapX>/Frameworks/)
+                        $<TARGET_BUNDLE_CONTENT_DIR:depthmapX>/Frameworks/
+                COMMENT "Copying the GPU module into depthmapX.app")
+            add_dependencies(depthmapX_bundle_gpu depthmapX depthmapX_gpu)
         endif()
     endif()
 endif()
