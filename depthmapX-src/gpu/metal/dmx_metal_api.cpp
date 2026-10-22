@@ -43,7 +43,10 @@ void clearError() { t_lastError.clear(); }
 
 // One analysis records commands at a time; the lock also guards the device creation.
 std::mutex g_mutex;
-std::unique_ptr<Device> g_device;
+// The device lives as long as the process and is never destroyed: releasing Metal objects
+// from a static destructor while the process exits gains nothing (the system reclaims
+// everything) and can run after the libraries it calls have been torn down.
+Device *g_device = nullptr;
 bool g_deviceTried = false;
 int g_deviceCode = DMX_GPU_OK;
 std::string g_deviceError;
@@ -51,14 +54,14 @@ std::string g_deviceError;
 Device *device(int &code) { // caller holds g_mutex
     if (!g_deviceTried) {
         g_deviceTried = true;
-        g_device = dmxmetal::createDevice(&g_deviceCode, g_deviceError);
+        g_device = dmxmetal::createDevice(&g_deviceCode, g_deviceError).release();
     }
     if (!g_device) {
         code = setError(g_deviceCode != DMX_GPU_OK ? g_deviceCode : DMX_GPU_ERR_NO_DEVICE,
                         g_deviceError.empty() ? "no Metal device" : g_deviceError);
         return nullptr;
     }
-    return g_device.get();
+    return g_device;
 }
 
 uint64_t availableBytes(const Device &dev) {
