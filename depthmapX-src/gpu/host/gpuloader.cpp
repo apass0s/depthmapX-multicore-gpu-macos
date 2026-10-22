@@ -172,9 +172,17 @@ bool GpuModule::load() {
 std::string GpuModule::deviceDescription() const {
     char buf[400];
 #ifdef __APPLE__
-    // Metal: cc_major is the newest Apple GPU family supported, total_mem the recommended
-    // working set of the unified memory
-    std::snprintf(buf, sizeof(buf), "%s, Metal, GPU family Apple%d, %.0f MiB", m_device.name, m_device.cc_major,
+    // Metal: cc_major is the newest Apple GPU family supported (0 on Intel Macs' GPUs, which
+    // are Mac family: cc_minor 2 for Mac2), total_mem the recommended working set
+    char family[32];
+    if (m_device.cc_major > 0) {
+        std::snprintf(family, sizeof(family), "Apple%d", m_device.cc_major);
+    } else if (m_device.cc_minor > 0) {
+        std::snprintf(family, sizeof(family), "Mac%d", m_device.cc_minor);
+    } else {
+        std::snprintf(family, sizeof(family), "unknown");
+    }
+    std::snprintf(buf, sizeof(buf), "%s, Metal, GPU family %s, %.0f MiB", m_device.name, family,
                   m_device.total_mem / 1048576.0);
 #else
     std::snprintf(buf, sizeof(buf), "%s, compute %d.%d, %.0f MiB", m_device.name, m_device.cc_major,

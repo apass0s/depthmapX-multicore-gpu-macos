@@ -88,8 +88,17 @@ done
 
 echo "### 3. Metal on larger grids (against the multicore CPU)"
 if [ $GPU_TESTED = yes ]; then
+    # A GPU with little memory (e.g. 1 GiB) cannot hold the largest grid: the CPU fallback is
+    # then correct behaviour, accepted when its reason is memory and reported; any other
+    # reason for not using the GPU fails.
     CASE=metal_large; V --make-grid 0.02 --make-grid 0.01 --grid-base "$EX/galeria_vazia.graph" --modes cpu,gpu \
-                        --reference cpu --cases vis_local,vis_global,vis_global_r3,vis_global_list
+                        --reference cpu --gpu-optional --cases vis_local,vis_global,vis_global_r3,vis_global_list
+    while IFS= read -r line; do
+        case "$line" in
+            *"GPU memory"*|*"exceeds the Metal limit"*) echo "NOTE: fell back to the CPU for lack of GPU memory: $line" ;;
+            *) fail "GPU not used: $line" ;;
+        esac
+    done < <(grep '^|.*GPU NOT USED' "$OUT/validate-metal_large.log" | sed 's/^.*GPU NOT USED *| *//')
 else
     echo "skipped: no Metal device"
 fi
