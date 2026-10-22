@@ -13,9 +13,14 @@ option(DEPTHMAPX_GUI "Build the depthmapX graphical interface and its tests (nee
 # macOS. Without it everything else still builds and the accelerated analyses run on
 # the CPU.
 option(DEPTHMAPX_GPU "Build the depthmapX_gpu module (CUDA, or Metal on macOS) when possible" ON)
+# On macOS the Metal device layer is plain C++ that loads Metal at run time (no SDK
+# needed, so it cross-compiles); DEPTHMAPX_METAL_SDK builds the Objective-C++ one instead.
+option(DEPTHMAPX_METAL_SDK "macOS: build the Metal module against the SDK headers (Objective-C++)" OFF)
 if (DEPTHMAPX_GPU AND APPLE)
     # NVIDIA CUDA does not exist on macOS; gpu/metal implements the same C interface.
-    enable_language(OBJCXX)
+    if (DEPTHMAPX_METAL_SDK)
+        enable_language(OBJCXX)
+    endif()
 elseif (DEPTHMAPX_GPU)
     include(CheckLanguage)
     check_language(CUDA)

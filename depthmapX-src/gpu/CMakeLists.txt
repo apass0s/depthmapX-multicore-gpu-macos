@@ -3,7 +3,8 @@
 # host/  is compiled into salalib: the multicore (OpenMP) versions of the accelerated
 #        analyses and the run-time loader for the GPU module. It never links CUDA or Metal.
 # cuda/  builds depthmapX_gpu (DLL / shared library) with nvcc (Windows, Linux).
-# metal/ builds libdepthmapX_gpu.dylib on macOS: the same C interface (include/) on Metal.
+# metal/ builds libdepthmapX_gpu.dylib on macOS: the same C interface (include/) on Metal,
+#        which it loads at run time (dmx_metal_device_rt.cpp; or the SDK: dmx_metal_device.mm).
 #        metal/emu/ runs the Metal kernels on CPU threads, to test them without a Mac.
 # salalib loads the module at run time, so the programs run where it, the driver or a
 # suitable GPU is missing.
@@ -97,18 +98,30 @@ endfunction()
 
 if (APPLE AND DEPTHMAPX_GPU)
     dmx_embed_metal_source(${CMAKE_CURRENT_BINARY_DIR}/dmx_metal_source.inc)
-    add_library(depthmapX_gpu SHARED
-        metal/dmx_metal_api.cpp
-        metal/dmx_metal_device.mm)
+    if (DEPTHMAPX_METAL_SDK)
+        add_library(depthmapX_gpu SHARED
+            metal/dmx_metal_api.cpp
+            metal/dmx_metal_device.mm)
+        target_compile_options(depthmapX_gpu PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+        target_link_libraries(depthmapX_gpu PRIVATE "-framework Metal" "-framework Foundation")
+    else()
+        # Default: Metal, Foundation and the Objective-C runtime are opened at run time.
+        add_library(depthmapX_gpu SHARED
+            metal/dmx_metal_api.cpp
+            metal/dmx_metal_device_rt.cpp)
+    endif()
     target_include_directories(depthmapX_gpu PRIVATE ${CMAKE_CURRENT_BINARY_DIR} metal)
-    target_compile_options(depthmapX_gpu PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
-    target_link_libraries(depthmapX_gpu PRIVATE "-framework Metal" "-framework Foundation")
     set_target_properties(depthmapX_gpu PROPERTIES
         CXX_VISIBILITY_PRESET hidden
         OBJCXX_VISIBILITY_PRESET hidden
         OBJCXX_STANDARD 17
         # dlopen'ed by full path; @rpath keeps the bundle relocatable
         INSTALL_NAME_DIR "@rpath")
+    if (CMAKE_HOST_WIN32)
+        # cross-builds: CMake would write the Windows path separator into "@rpath\..."
+        set_target_properties(depthmapX_gpu PROPERTIES NO_SONAME ON)
+        target_link_options(depthmapX_gpu PRIVATE "LINKER:-install_name,@rpath/libdepthmapX_gpu.dylib")
+    endif()
 
     # The loader looks next to the executable (and in the app's Frameworks folder, see
     # the top-level CMakeLists.txt), so put a copy beside the command line program.
@@ -138,4 +151,31 @@ if (DEPTHMAPX_METAL_EMULATOR)
     if (WIN32)
         set_target_properties(depthmapX_gpu_metalemu PROPERTIES PREFIX "") # depthmapX_gpu.dll, also with MinGW
     endif()
+endif()
+
+# The SDK-free Metal device layer (dmx_metal_device_rt.cpp) on a fake Objective-C runtime
+# and Metal (metal/emu/objcmock, Windows x64 with GCC or Clang) over the CPU emulator:
+# tests its messages, reference counting and results without a Mac. Drop-in GPU module
+# like the emulator above (output directory metal-objcmock).
+option(DEPTHMAPX_METAL_OBJC_MOCK "Build the SDK-free Metal module on a fake Objective-C runtime (tests, Windows x64)" OFF)
+if (DEPTHMAPX_METAL_OBJC_MOCK)
+    find_package(Threads REQUIRED)
+    dmx_embed_metal_source(${CMAKE_CURRENT_BINARY_DIR}/dmx_metal_source.inc)
+    add_library(depthmapX_gpu_objcmock SHARED
+        metal/emu/objcmock/objc_mock.cpp
+        metal/emu/objcmock/emu_device.cpp
+        metal/dmx_metal_api.cpp
+        metal/dmx_metal_device_rt.cpp)
+    # objcmock/ first: its dlfcn.h stands in for the system one
+    target_include_directories(depthmapX_gpu_objcmock PRIVATE metal/emu/objcmock ${CMAKE_CURRENT_BINARY_DIR} metal)
+    target_compile_definitions(depthmapX_gpu_objcmock PRIVATE DMX_GPU_BUILDING_DLL)
+    target_link_libraries(depthmapX_gpu_objcmock PRIVATE Threads::Threads)
+    set_target_properties(depthmapX_gpu_objcmock PROPERTIES
+        CXX_STANDARD 20
+        CXX_VISIBILITY_PRESET hidden
+        OUTPUT_NAME depthmapX_gpu
+        PREFIX ""
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/metal-objcmock
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/metal-objcmock
+        ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/metal-objcmock)
 endif()
