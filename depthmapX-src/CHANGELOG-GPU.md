@@ -15,6 +15,15 @@ Full description, test results and the steps for Apple hardware: `../MACOS-PORT.
 - GPU on macOS: `gpu/metal/`, a Metal module behind the same C interface as the CUDA
   one (VGA visual local and global measures), with a CPU emulator (`gpu/metal/emu/`)
   that runs the same kernels for tests on machines without Metal.
+- The Metal module's device layer opens Metal at run time (`dmx_metal_device_rt.cpp`,
+  no SDK needed), so it is cross-compiled on Windows; the Objective-C++ version stays as
+  `-DDEPTHMAPX_METAL_SDK=ON`. Tested on Windows on a fake Objective-C runtime and Metal
+  (`gpu/metal/emu/objcmock/`, `-DDEPTHMAPX_METAL_OBJC_MOCK=ON`) over the emulator. The
+  device is never destroyed (no Metal calls while the process exits).
+- Test package for a Mac (`tools/mac/package_cross.py`): our command line program and
+  GPU module (universal), upstream's official 0.9.1 apps as the interface, and a
+  double-click self-test (`tools/mac/selftest.command`) that compares serial, multicore,
+  GPU and upstream's official program and writes a report.
 - `-gpu` means Metal on macOS (help text, GUI checkbox, run reports); the GPU threshold
   is per platform (Metal value provisional, `tools/mac/bench_gpu_threshold.py`).
 - Build: `DEPTHMAPX_GUI` option, macOS 11 minimum, Metal module in the app bundle,

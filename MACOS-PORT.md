@@ -18,7 +18,8 @@ the validation on Apple hardware are at the end.
 | `upstream/depthmapX-0.9.1/` | unmodified upstream v0.9.1 from GitHub (`v0.9.1.tar.gz`, sha256 `ce912354…d0b`); identical, file for file, to the base of our Windows build |
 | `tools/zig-x86_64-windows-0.14.1/` | Zig 0.14.1 (official zip, checksum verified): clang 19 + libc++ + macOS system stubs, for cross-compiling |
 | `tools/libomp/` | LLVM OpenMP 19.1.5 runtime for macOS 11+, universal arm64 + x86_64 (mac.r-project.org/openmp) |
-| `out/` | build products (the cross-built preview zip) |
+| `upstream/release-0.9.1-macos/` | upstream's official v0.9.1 macOS release files (GitHub release assets, unmodified): `depthmapX-0.9.1_macos_arm64.zip` (sha256 `01678a0c…3535`), `depthmapX-0.9.1_macos_intel.zip` (`5042f09d…cd41`), `depthmapXcli_macos_arm64` (`070ffa04…4704`), `depthmapXcli_macos_intel` (`1a196b9a…93aa`) |
+| `out/` | build products: `depthmapX-multicore-gpu-macos.zip`, the test package for a Mac |
 
 `tools/`, `upstream/` and `out/` are downloads and products, not tracked by git.
 
@@ -57,10 +58,27 @@ CUDA one, so the host code, the dispatch decision and the CPU fallback are uncha
   maximum buffer length, and lanes are reduced until every grid has fewer than 2^32
   threads. The local measures are committed in command buffers of 256 rows, well below
   the macOS GPU watchdog.
-- `dmx_metal_device.mm`: the Metal calls (device, kernels compiled at run time from
-  source embedded by CMake, pipelines, buffers in shared storage, serial compute
-  encoders). Compiling at run time means only the Command Line Tools are needed (the
-  offline `metal` compiler comes with full Xcode).
+- The Metal calls (device, kernels compiled at run time from source embedded by CMake,
+  pipelines, buffers in shared storage, serial compute encoders) exist in two versions
+  of the same device layer (`dmx_metal_backend.h`):
+  - `dmx_metal_device_rt.cpp` (default): plain C++ that opens the Objective-C runtime,
+    Foundation and Metal with `dlopen` and sends every message through `objc_msgSend`
+    cast to the method's exact C signature. It needs no Apple header or SDK, so the
+    module is cross-compiled on Windows with the command line program, and it links
+    only `libSystem`. Ownership is explicit (no ARC); every selector is checked with
+    `respondsToSelector:` when the device is created, so a missing method means the CPU,
+    not a crash; no message returns a struct or a float (no `_stret`/`_fpret` variants).
+  - `dmx_metal_device.mm` (`-DDEPTHMAPX_METAL_SDK=ON`, a Mac with the SDK): the same in
+    Objective-C++ with ARC, kept as the reference.
+  Compiling the kernels at run time means no offline `metal` compiler (full Xcode) is
+  needed. The device is created once and never destroyed (no Metal calls at exit).
+- `emu/objcmock/`: a fake Objective-C runtime and Metal for Windows x64: an assembly
+  `objc_msgSend` trampoline (looks the method up, jumps with the caller's arguments),
+  Metal objects with reference counts over the CPU emulator, autorelease pools,
+  zombies (a message to a released object is fatal), checks on encoder/command-buffer
+  rules, a report of the objects alive at exit, and failure injection
+  (`DMX_OBJCMOCK_FAIL`). It tests `dmx_metal_device_rt.cpp` itself; it cannot test that
+  the selector names and signatures are Apple's (those were taken from Apple's API).
 - `emu/`: the same module on a CPU emulator (for tests on machines without Metal; never
   shipped): the kernels compiled as C++, threadgroups with real barriers, threadgroups
   in parallel, real atomics, Metal's limit checks, junk-filled new buffers.
@@ -89,7 +107,8 @@ missing `<cstdint>` (found with GCC 16; newer libc++ versions need it too).
 (Apple's compiler family targeting Windows, for tests), `upstream-cli/` (builds unmodified
 upstream's CLI as the reference, no Qt), `machoinfo.py` (inspect Mach-O files),
 `make_tbd.py` (libomp stub with install name `@rpath/libomp.dylib`), `lipo.py`
-(universal binaries), `package_cross.py` (CLI preview zip from Windows),
+(universal binaries), `package_cross.py` (the test package, from Windows),
+`selftest.command` (the package's double-click self-test),
 `build_macos.sh`, `test_macos.sh`, `package_macos.sh` (on a Mac),
 `bench_gpu_threshold.py`. `tools/gpu/validate.py` gained an `upstream` mode.
 
@@ -111,12 +130,19 @@ links), Barnsbury axial (and `barnsbury_extended1_axial`), Barnsbury segments.
 | 7 | Workspace tree with **GCC 16 + libgomp** (multithreaded OpenMP, non-Microsoft): 5 test suites; all analyses, multicore + Metal emulator | upstream 0.9.1 built with MSVC | tests pass; **identical** in every case |
 | 8 | **Metal module on the CPU emulator** (MSVC), VGA visibility, local + global, radius lists | upstream 0.9.1 (MSVC) / `-serial` | **identical** (gallery grid); 17k grid identical to the multicore CPU |
 | 9 | Metal emulator under stress: threadgroups of 8, 32, 48, 64, 96, 256 threads; threadgroup memory 512 B – 32 KiB (rows split into many slices); max buffer 2 MiB (lanes 1024 → 64); dispatches capped at 7 threadgroups; working set 530/560 MiB | multicore CPU | **identical** in every configuration; limits it cannot meet fall back to the CPU, still identical |
+| 10 | **SDK-free Metal module** (`dmx_metal_device_rt.cpp`) cross-built for **arm64 and x86_64** | build + link (cannot run) | builds without warnings; links only `libSystem`; install name `@rpath/libdepthmapX_gpu.dylib`; arm64 ad-hoc signed; a macOS test program linked against it resolves all 10 C entry points (both architectures); universal module assembled |
+| 11 | the same device layer on the **fake Objective-C runtime + Metal** (`emu/objcmock`, clang/libc++ Windows build), VGA visibility local, global, radius 3, radius list | upstream 0.9.1 (same clang) / `-serial` | **identical** in all 4 cases; 0 Objective-C rule violations; at exit only the device, its queue and 6 pipelines alive (no buffer, command buffer, encoder or string leaked) |
+| 12 | failure injection through the fake runtime: no device, kernel compile error, pipeline error, buffer allocation failure, GPU fault, missing `dispatchThreadgroups:…`, missing `supportsFamily:`, missing `setFastMathEnabled:` | — | each falls back to the CPU with the reason in the report (the last one still runs on the GPU, only fast math is left at Metal's default; the kernels are integer-only) |
+| 13 | the package's self-test (`selftest.command`) run with Git Bash on Windows, the Windows release (CUDA) standing in for the Mac programs, in a folder with a space in its path | — | runs to the end, every comparison made; all identical, `PASSED` |
 
 Bugs found and fixed on the way: the local kernel's name clashed with the API type under
 clang (MSVC accepted it); `salalib/layermanager.h` missed `<cstdint>` (GCC 16); the count
 kernel needed 64 threads per threadgroup (now any number); large grids are split into
 dispatches of at most 65,535 threadgroups; 64-bit popcount / ctz built from 32-bit
-built-ins (the 64-bit forms are not guaranteed in every Metal version).
+built-ins (the 64-bit forms are not guaranteed in every Metal version); the GPU module
+released its Metal objects from a static destructor while the process exited, which
+crashed under the fake runtime after the results were written (now the device is never
+destroyed).
 
 Timings measured here are not meaningful for Metal (the emulator runs on the CPU and is
 slow by design).
@@ -124,10 +150,13 @@ slow by design).
 ## Not verified (needs a Mac)
 
 - That anything runs on macOS: no binary built here has been executed on a Mac.
-- The Metal module on real hardware: `dmx_metal_device.mm` was never compiled (it needs
-  the macOS SDK, whose licence ties it to Apple hardware), the kernels were never compiled
-  by Apple's Metal compiler (the emulator compiles them as C++, which does not check
-  Metal-only rules), and GPU memory ordering, the watchdog and performance are untested.
+- The Metal module on real hardware: the SDK-free device layer was only run on a fake
+  runtime, which checks its logic but not that the selector names and signatures match
+  Apple's (a mismatch would be reported and fall back to the CPU, or crash if a signature
+  is wrong); `dmx_metal_device.mm` was never compiled (it needs the macOS SDK, whose
+  licence ties it to Apple hardware); the kernels were never compiled by Apple's Metal
+  compiler (the emulator compiles them as C++, which does not check Metal-only rules);
+  GPU memory ordering, the watchdog and performance are untested.
 - The GUI on macOS (needs Qt for macOS; Homebrew's `qt@5` is assumed to still be
   installable; if it is not, the GUI needs Qt 5.15 from elsewhere or a port to Qt 6).
 - Packaging with `macdeployqt`, ad-hoc signing and Gatekeeper behaviour.
@@ -184,10 +213,25 @@ tools/mac/package_macos.sh ../build-macos-x86_64 "$EX" x86_64
 ```
 Universal 2: the command line part can be joined with
 `lipo -create -output depthmapXcli motor-arm64/depthmapXcli motor-x86_64/depthmapXcli`
-(or `tools/mac/lipo.py`, as the preview zip does); a universal GUI needs a universal Qt
+(or `tools/mac/lipo.py`, as the test package does); a universal GUI needs a universal Qt
 (Homebrew's is single-architecture), so ship the two apps separately until then.
 
-Without a Mac at hand, `out/depthmapX-multicore-gpu-macos-cli-preview.zip` holds the
-cross-built command line program (universal, multicore, no GPU module, no GUI): copy it to
-a Mac, unzip, clear the quarantine flag (README) and run e.g.
-`motor/depthmapXcli -m VGA -f exemplos/galeria_grade_0.04.graph -o out.graph -vm visibility -vl -vg -vr n`.
+## Testing without building: the test package
+
+`out/depthmapX-multicore-gpu-macos.zip` (built on Windows with `tools/mac/package_cross.py`)
+needs nothing installed on the Mac:
+- `motor/`: our `depthmapXcli`, `libdepthmapX_gpu.dylib` (Metal) and `libomp.dylib`, all
+  universal (arm64 + x86_64);
+- `interface/Apple-Silicon/`, `interface/Intel/`: upstream's official depthmapX 0.9.1
+  apps, unchanged (copied entry by entry from upstream's zips: symlinks, permissions and
+  signatures intact). Analyses run from their menus are upstream's single-core code;
+- `teste/upstream-0.9.1/`: upstream's official `depthmapXcli` for both architectures;
+- `exemplos/`, `LEIA-ME README.txt`, `Terminal depthmapX.command`, `Teste depthmapX.command`.
+
+On the Mac: unzip, run `xattr -dr com.apple.quarantine <folder>` once (the files are not
+notarised), double-click `Teste depthmapX.command`. It runs 11 analyses with `-serial`,
+multicore, Metal (VGA visibility) and upstream's official program, compares `.graph` files
+and exported tables byte for byte (multicore and Metal must equal `-serial`; upstream's
+official program is reported for information, since its compiler settings may differ),
+times all cores against the GPU on 17k- and 22k-point grids, repeats part of it as Intel
+code under Rosetta 2 when installed, and writes `test-report.txt` (10–20 minutes).
