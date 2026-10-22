@@ -172,7 +172,7 @@ def main():
                         verdict += ", .graph identical" if same_graph else ", .graph BYTES DIFFER"
                         all_ok = all_ok and same_graph
                 reports = [line for line in out.splitlines() if line.startswith(("VGA ", "Segment ", "Axial "))]
-                rows.append((gname, case, mode, secs, verdict, note or "; ".join(reports)))
+                rows.append((gname, case, mode, secs, verdict, "; ".join([note] * bool(note) + reports)))
                 print(f"{gname:22} {case:13} {mode:7} {secs:10.3f} s  {verdict}  {note}", flush=True)
 
     print()

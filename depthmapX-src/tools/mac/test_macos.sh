@@ -98,7 +98,7 @@ if [ $GPU_TESTED = yes ]; then
             *"GPU memory"*|*"exceeds the Metal limit"*) echo "NOTE: fell back to the CPU for lack of GPU memory: $line" ;;
             *) fail "GPU not used: $line" ;;
         esac
-    done < <(grep '^|.*GPU NOT USED' "$OUT/validate-metal_large.log" | sed 's/^.*GPU NOT USED *| *//')
+    done < <(grep '^|.*GPU NOT USED' "$OUT/validate-metal_large.log" | sed -e 's/^.*GPU NOT USED;* *//' -e 's/ *|$//')
 else
     echo "skipped: no Metal device"
 fi

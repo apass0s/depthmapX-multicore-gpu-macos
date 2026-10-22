@@ -35,7 +35,9 @@ Full description, test results and the steps for Apple hardware: `../MACOS-PORT.
   (inspect, universal binaries, libomp stub), packaging and test scripts for a Mac.
 - Portability fixes: `mgraph440/comm.h` (`<sys/timeb.h>` only where it exists),
   `salalib/layermanager.h` (`<cstdint>`).
-- `tools/gpu/validate.py`: `upstream` mode (compare with a separately built upstream).
+- `tools/gpu/validate.py`: `upstream` mode (compare with a separately built upstream);
+  a GPU run that fell back to the CPU keeps its reason in the table (`test_macos.sh`
+  accepts only memory fallbacks on the largest grid).
 - Windows: same results as the current release in every validated case (the CUDA path
   included); the credits say "Multicore + GPU build".
 
