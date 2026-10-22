@@ -57,6 +57,8 @@ find "$EX" -maxdepth 1 -type f \( -name '*.graph' -o -name '*.dxf' \) -exec cp {
 STATUS="Built on macOS ($(sw_vers -productVersion), $ARCH) from the macos-testing branch; validated
 with tools/mac/test_macos.sh on that Mac (see its report)."
 FOLDERS="  interface/depthmapX.app    graphical interface, with the multicore and GPU code
+                             (all CPU cores always; for the GPU tick Tools > Options >
+                             \"Use the GPU (Metal) when available\", off by default)
   motor/                     depthmapXcli (command line) and the Metal GPU module
   Teste depthmapX.command    double-click: self-test, writes test-report.txt"
 python3 - "$SRC/tools/mac/README-macos.txt" "$DIST/LEIA-ME README.txt" "$STATUS" "$FOLDERS" <<'PY'
