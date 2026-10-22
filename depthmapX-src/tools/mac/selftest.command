@@ -144,7 +144,8 @@ main() {
         same "$g-gpu" "$g-multicore" must
     done
 
-    if [ $NATIVE = arm64 ] && arch -x86_64 /usr/bin/true 2>/dev/null; then
+    # (file, not lipo: lipo needs the Command Line Tools)
+    if [ $NATIVE = arm64 ] && file "$CLI" | grep -q x86_64 && arch -x86_64 /usr/bin/true 2>/dev/null; then
         echo
         echo "######## x86_64 (Intel code under Rosetta 2)"
         PREFIX="arch -x86_64" SUFFIX="-x86_64" UPSTREAM="$DIR/teste/upstream-0.9.1/depthmapXcli-intel"
@@ -157,7 +158,7 @@ main() {
         for n in vga-visibility-serial vga-visibility-multicore vga-visibility-gpu vga-metric-multicore axial-multicore segment-tulip-multicore; do
             same "$n-x86_64" "$n" must
         done
-    elif [ $NATIVE = arm64 ]; then
+    elif [ $NATIVE = arm64 ] && file "$CLI" | grep -q x86_64; then
         echo
         echo "(Rosetta 2 is not installed: the Intel version was not tested on this Mac)"
     fi

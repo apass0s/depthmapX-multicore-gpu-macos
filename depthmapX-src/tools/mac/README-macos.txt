@@ -36,7 +36,6 @@ What runs where
   Axial integration, segment analyses  all CPU cores
   Visibility graph construction        all CPU cores
   Other analyses                       as in upstream (single core)
-  Anything started from the interface  as in upstream (single core): it is upstream's app
 
 Command line (motor/depthmapXcli), in addition to the upstream options
   -gpu              use the GPU (Metal) where supported (falls back to the CPU)

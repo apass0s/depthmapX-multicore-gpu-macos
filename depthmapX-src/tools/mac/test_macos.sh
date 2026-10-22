@@ -46,10 +46,20 @@ if ! "$CMAKE" -S "$SRC/tools/mac/upstream-cli" -B "$UPBUILD" -G Ninja -DCMAKE_BU
 fi
 CLI="$BUILD/depthmapXcli/depthmapXcli"
 UP="$UPBUILD/depthmapXcli/depthmapXcli"
-"$CLI" -m VGA -f "$EX/galeria_grade_0.04.graph" -o "$OUT/probe.graph" -vm visibility -vl -gpu -gpumin 0 \
-    | grep "VGA visual local" || true
+PROBE="$("$CLI" -m VGA -f "$EX/galeria_grade_0.04.graph" -o "$OUT/probe.graph" -vm visibility -vl -gpu -gpumin 0 \
+    | grep "VGA visual local")"
+echo "$PROBE"
+# Without a usable Metal device (e.g. some virtual machines) the "gpu" runs fall back to
+# the CPU: they must still give identical results, but the GPU itself is not tested.
+GPU_OPT=""
+case "$PROBE" in
+    *": GPU ("*) GPU_TESTED=yes ;;
+    *) GPU_TESTED=no
+       GPU_OPT="--gpu-optional"
+       echo "NOTE: no usable Metal device here, so the GPU is NOT tested (gpu runs use the CPU)" ;;
+esac
 
-V() { python3 "$SRC/tools/gpu/validate.py" --cli "$CLI" --upstream "$UP" --out "$OUT/validate" "$@" \
+V() { python3 "$SRC/tools/gpu/validate.py" --cli "$CLI" --upstream "$UP" --out "$OUT/validate" $GPU_OPT "$@" \
           > "$OUT/validate-$CASE.log" 2>&1 || fail "$CASE (see $OUT/validate-$CASE.log)";
       grep -v '^|' "$OUT/validate-$CASE.log" | grep . ; }
 CASE=vis;        V --graph "$EX/galeria_grade_0.04.graph" --modes upstream,serial,cpu,gpu --reference upstream \
@@ -77,9 +87,14 @@ for sp in 0.04 0.02; do
 done
 
 echo "### 3. Metal on larger grids (against the multicore CPU)"
-CASE=metal_large; V --make-grid 0.02 --make-grid 0.01 --grid-base "$EX/galeria_vazia.graph" --modes cpu,gpu \
-                    --reference cpu --cases vis_local,vis_global,vis_global_r3,vis_global_list
+if [ $GPU_TESTED = yes ]; then
+    CASE=metal_large; V --make-grid 0.02 --make-grid 0.01 --grid-base "$EX/galeria_vazia.graph" --modes cpu,gpu \
+                        --reference cpu --cases vis_local,vis_global,vis_global_r3,vis_global_list
+else
+    echo "skipped: no Metal device"
+fi
 
 echo
-[ $FAILED = 0 ] && echo "PASSED ($ARCH)" || echo "FAILED ($ARCH): see the lines above"
+[ $GPU_TESTED = yes ] && GPU_NOTE="GPU tested" || GPU_NOTE="GPU NOT tested: no Metal device"
+[ $FAILED = 0 ] && echo "PASSED ($ARCH; $GPU_NOTE)" || echo "FAILED ($ARCH; $GPU_NOTE): see the lines above"
 exit $FAILED

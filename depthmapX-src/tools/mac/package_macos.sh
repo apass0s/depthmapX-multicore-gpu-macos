@@ -56,8 +56,9 @@ echo "## documents and examples"
 find "$EX" -maxdepth 1 -type f \( -name '*.graph' -o -name '*.dxf' \) -exec cp {} "$DIST/exemplos/" \;
 STATUS="Built on macOS ($(sw_vers -productVersion), $ARCH) from the macos-testing branch; validated
 with tools/mac/test_macos.sh on that Mac (see its report)."
-FOLDERS="  interface/depthmapX.app    graphical interface
-  motor/                     depthmapXcli (command line) and the Metal GPU module"
+FOLDERS="  interface/depthmapX.app    graphical interface, with the multicore and GPU code
+  motor/                     depthmapXcli (command line) and the Metal GPU module
+  Teste depthmapX.command    double-click: self-test, writes test-report.txt"
 python3 - "$SRC/tools/mac/README-macos.txt" "$DIST/LEIA-ME README.txt" "$STATUS" "$FOLDERS" <<'PY'
 import sys
 src, dst, status, folders = sys.argv[1:]
@@ -76,6 +77,16 @@ echo
 exec "${SHELL:-/bin/zsh}" -i
 SH
 chmod +x "$DIST/Terminal depthmapX.command"
+cp "$SRC/tools/mac/selftest.command" "$DIST/Teste depthmapX.command"
+chmod +x "$DIST/Teste depthmapX.command"
+# Upstream's official depthmapXcli 0.9.1 (release assets depthmapXcli_macos_arm64 and
+# depthmapXcli_macos_intel), the self-test's independent reference, when given.
+if [ -n "${UPSTREAM_CLI_DIR:-}" ]; then
+    mkdir -p "$DIST/teste/upstream-0.9.1"
+    cp "$UPSTREAM_CLI_DIR/depthmapXcli_macos_arm64" "$DIST/teste/upstream-0.9.1/depthmapXcli-arm64"
+    cp "$UPSTREAM_CLI_DIR/depthmapXcli_macos_intel" "$DIST/teste/upstream-0.9.1/depthmapXcli-intel"
+    chmod +x "$DIST/teste/upstream-0.9.1/"*
+fi
 
 echo "## checks"
 otool -L "$DIST/motor/depthmapXcli"
