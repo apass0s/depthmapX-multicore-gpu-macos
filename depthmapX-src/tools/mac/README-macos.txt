@@ -16,12 +16,19 @@ Folders
 Requirements
   macOS 11 (Big Sur) or newer, on Apple Silicon (M1 and later) or Intel.
   Nothing to install: the OpenMP runtime (libomp.dylib) is included.
+  GPU: every Mac that runs macOS 11 has Metal; if the GPU cannot be used, the CPU is.
 
 First use: macOS blocks programs downloaded from the internet that are not notarised
 by Apple. Once, open Terminal (Applications > Utilities), type
     xattr -dr com.apple.quarantine
 followed by a space, drag this folder onto the Terminal window and press Enter.
 (Copied from a USB stick there is usually no block.)
+Alternatively: right-click (Control-click) a program > Open > Open.
+
+Testing (please): double-click "Teste depthmapX.command". It runs every accelerated
+analysis on one core, on all cores and on the GPU, compares the results byte for byte
+with each other and with upstream's official program, and writes test-report.txt in this
+folder. It takes 10 to 20 minutes. Send test-report.txt back to us.
 
 What runs where
   VGA visibility (local, global)       all CPU cores, or the GPU (Metal) on request
@@ -29,6 +36,7 @@ What runs where
   Axial integration, segment analyses  all CPU cores
   Visibility graph construction        all CPU cores
   Other analyses                       as in upstream (single core)
+  Anything started from the interface  as in upstream (single core): it is upstream's app
 
 Command line (motor/depthmapXcli), in addition to the upstream options
   -gpu              use the GPU (Metal) where supported (falls back to the CPU)
