@@ -1,0 +1,135 @@
+name: macos
+
+# Builds depthmapX multicore + GPU natively on GitHub's macOS machines (Apple Silicon and
+# Intel), with our interface, the command line and the Metal module; checks the Metal
+# kernels with Apple's compiler; compares every analysis with unmodified upstream 0.9.1
+# built on the same machine (tools/mac/test_macos.sh); packages the app; and runs the
+# package's self-test. The packages and the test logs are uploaded as artifacts.
+#
+# Runs on every push to the macos branch, and by hand (Actions > macos > Run workflow).
+
+on:
+  push:
+    branches: [macos]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  HOMEBREW_NO_INSTALL_CLEANUP: 1
+  # upstream's sources and official macOS command line programs, v0.9.1
+  UPSTREAM_TARBALL: https://github.com/SpaceGroupUCL/depthmapX/archive/refs/tags/v0.9.1.tar.gz
+  UPSTREAM_TARBALL_SHA256: ce9123543b58b3b3e97c291707c9e33eedca3d390fdd30a5a37d0778db674d0b
+  UPSTREAM_RELEASE: https://github.com/SpaceGroupUCL/depthmapX/releases/download/v0.9.1
+  UPSTREAM_CLI_ARM64_SHA256: 070ffa04c923508cd101ff349a56632b8bffc7a4d59ae5ac735cb9e5f48e4704
+  UPSTREAM_CLI_INTEL_SHA256: 1a196b9acd4aaf56db7b2217ce63b056a4c2452f2dc13f35a96532c270b093aa
+
+jobs:
+  mac:
+    name: ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            os: macos-latest      # Apple Silicon
+          - arch: x86_64
+            os: macos-15-intel    # Intel
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: This Mac
+        run: |
+          sw_vers
+          echo "architecture: $(uname -m); CPU: $(sysctl -n machdep.cpu.brand_string); cores: $(sysctl -n hw.ncpu)"
+          echo "memory: $(( $(sysctl -n hw.memsize) / 1073741824 )) GiB"
+          system_profiler SPDisplaysDataType || true
+          xcodebuild -version || true
+
+      - name: Install Qt 5, libomp, ninja
+        run: |
+          brew install ninja qt@5 libomp
+          command -v cmake || brew install cmake
+          cmake --version
+
+      - name: Upstream 0.9.1 (sources and official command line programs)
+        run: |
+          set -eu
+          mkdir -p upstream/release-0.9.1-macos
+          cd upstream
+          curl -fsSL -o depthmapX-0.9.1.tar.gz "$UPSTREAM_TARBALL"
+          echo "$UPSTREAM_TARBALL_SHA256  depthmapX-0.9.1.tar.gz" | shasum -a 256 -c
+          tar xzf depthmapX-0.9.1.tar.gz
+          cd release-0.9.1-macos
+          curl -fsSL -o depthmapXcli_macos_arm64 "$UPSTREAM_RELEASE/depthmapXcli_macos_arm64"
+          curl -fsSL -o depthmapXcli_macos_intel "$UPSTREAM_RELEASE/depthmapXcli_macos_intel"
+          echo "$UPSTREAM_CLI_ARM64_SHA256  depthmapXcli_macos_arm64" | shasum -a 256 -c
+          echo "$UPSTREAM_CLI_INTEL_SHA256  depthmapXcli_macos_intel" | shasum -a 256 -c
+
+      - name: Metal kernels with Apple's compiler
+        run: depthmapX-src/tools/mac/check_metal_kernels.sh "$RUNNER_TEMP/metal-check"
+
+      - name: Build (interface, command line, Metal module, tests)
+        run: depthmapX-src/tools/mac/build_macos.sh ${{ matrix.arch }}
+
+      - name: Build the Objective-C++ Metal module too (SDK version, for comparison)
+        run: |
+          set -eu
+          BREW=$(brew --prefix)
+          cmake -S depthmapX-src -B build-sdk-${{ matrix.arch }} -G Ninja -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} -DDEPTHMAPX_GUI=OFF -DDEPTHMAPX_METAL_SDK=ON \
+              -DDEPTHMAPX_LIBOMP_ROOT="$BREW/opt/libomp"
+          cmake --build build-sdk-${{ matrix.arch }} --target depthmapX_gpu depthmapXcli
+
+      - name: Test against upstream
+        run: |
+          depthmapX-src/tools/mac/test_macos.sh build-macos-${{ matrix.arch }} upstream/depthmapX-0.9.1 \
+              exemplos ${{ matrix.arch }} 2>&1 | tee test-${{ matrix.arch }}.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Compare the two Metal modules (SDK-free default and Objective-C++)
+        run: |
+          set -eu
+          G=exemplos/galeria_grade_0.04.graph
+          for b in build-macos-${{ matrix.arch }} build-sdk-${{ matrix.arch }}; do
+              "$b/depthmapXcli/depthmapXcli" -m VGA -f "$G" -o "$RUNNER_TEMP/$b.graph" \
+                  -vm visibility -vl -vg -vr 3,n -gpu -gpumin 0 | grep "^VGA "
+          done
+          cmp "$RUNNER_TEMP/build-macos-${{ matrix.arch }}.graph" "$RUNNER_TEMP/build-sdk-${{ matrix.arch }}.graph"
+          echo "identical .graph files"
+
+      - name: Package
+        env:
+          UPSTREAM_CLI_DIR: ${{ github.workspace }}/upstream/release-0.9.1-macos
+        run: |
+          mkdir -p dist
+          depthmapX-src/tools/mac/package_macos.sh build-macos-${{ matrix.arch }} exemplos ${{ matrix.arch }} dist
+
+      - name: Self-test of the package (what a user runs)
+        run: |
+          set -u
+          D=dist/depthmapX-multicore-gpu-macos-${{ matrix.arch }}
+          sh "$D/Teste depthmapX.command" > /dev/null 2>&1 || true
+          cat "$D/test-report.txt"
+          grep -q "PASSED: every multicore and GPU result" "$D/test-report.txt"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: depthmapX-multicore-gpu-macos-${{ matrix.arch }}
+          path: dist/depthmapX-multicore-gpu-macos-${{ matrix.arch }}.zip
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: test-logs-${{ matrix.arch }}
+          path: |
+            test-${{ matrix.arch }}.log
+            build-macos-${{ matrix.arch }}/macos-tests/*.log
+            dist/depthmapX-multicore-gpu-macos-${{ matrix.arch }}/test-report.txt
+            dist/depthmapX-multicore-gpu-macos-${{ matrix.arch }}/test-results/*.log
+          if-no-files-found: warn
