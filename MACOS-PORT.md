@@ -216,6 +216,29 @@ Universal 2: the command line part can be joined with
 (or `tools/mac/lipo.py`, as the test package does); a universal GUI needs a universal Qt
 (Homebrew's is single-architecture), so ship the two apps separately until then.
 
+## On GitHub's Macs (GitHub Actions)
+
+`.github/workflows/macos.yml` (this folder is the repository root) runs on every push to
+the `macos` branch and by hand, on an Apple Silicon (`macos-latest`) and an Intel
+(`macos-15-intel`) machine. Each one:
+1. installs `qt@5`, `libomp` and `ninja` with Homebrew;
+2. downloads upstream 0.9.1's sources and official command line programs (checksums
+   checked);
+3. compiles the Metal kernels with Apple's offline compiler (`check_metal_kernels.sh`;
+   also as Metal 2.3 for macOS 11, reported);
+4. builds everything natively (`build_macos.sh`: our interface, command line, Metal
+   module, tests), and the Objective-C++ Metal module separately;
+5. runs `test_macos.sh` (unit tests; every analysis against upstream built on that
+   machine; `-serial`, multicore, Metal). If the machine has no usable Metal device, the
+   GPU runs fall back to the CPU, must still be identical, and the result says
+   "GPU NOT tested";
+6. compares the two Metal modules' `.graph` output;
+7. packages the app (`package_macos.sh`, with the self-test and upstream's official
+   programs) and runs the package's self-test;
+8. uploads the package (`depthmapX-multicore-gpu-macos-<arch>`) and the logs.
+
+Examples: `exemplos/` (the Windows release's example maps).
+
 ## Testing without building: the test package
 
 `out/depthmapX-multicore-gpu-macos.zip` (built on Windows with `tools/mac/package_cross.py`)

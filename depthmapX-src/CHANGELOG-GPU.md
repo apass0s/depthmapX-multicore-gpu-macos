@@ -24,6 +24,9 @@ Full description, test results and the steps for Apple hardware: `../MACOS-PORT.
   GPU module (universal), upstream's official 0.9.1 apps as the interface, and a
   double-click self-test (`tools/mac/selftest.command`) that compares serial, multicore,
   GPU and upstream's official program and writes a report.
+- GitHub Actions (`macos-testing/.github/workflows/macos.yml`): native builds and tests on
+  Apple Silicon and Intel Macs, Metal kernels checked with Apple's compiler, packages with
+  our interface; `test_macos.sh` reports when no Metal device is available.
 - `-gpu` means Metal on macOS (help text, GUI checkbox, run reports); the GPU threshold
   is per platform (Metal value provisional, `tools/mac/bench_gpu_threshold.py`).
 - Build: `DEPTHMAPX_GUI` option, macOS 11 minimum, Metal module in the app bundle,
